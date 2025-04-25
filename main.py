@@ -142,26 +142,49 @@ async def filter_trades(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
 
     c.execute(
-        "SELECT date, pair, result, note, screenshot FROM trades WHERE user_id = ? AND substr(date, 1, 4) = ? AND substr(date, 6, 2) = ?",
+        "SELECT id, date, pair, result, note, screenshot FROM trades WHERE user_id = ? AND substr(date, 1, 4) = ? AND substr(date, 6, 2) = ?",
         (user_id, year, month)
     )
     trades = c.fetchall()
 
     if filter_type == "profit":
-        trades = [t for t in trades if safe_result_parse(t[2]) > 0]
+        trades = [t for t in trades if safe_result_parse(t[3]) > 0]
     elif filter_type == "loss":
-        trades = [t for t in trades if safe_result_parse(t[2]) < 0]
+        trades = [t for t in trades if safe_result_parse(t[3]) < 0]
 
     if not trades:
         await query.edit_message_text("No trades found for selected filter.")
         return ConversationHandler.END
 
+    # Составляем кнопки с коротким описанием (дата, пара, процент)
+    trade_buttons = []
     for trade in trades:
-        text = f"📅 {trade[0]}\n💱 {trade[1]}\n📊 {trade[2]}\n📝 {trade[3]}"
-        if trade[4]:
-            await context.bot.send_photo(chat_id=user_id, photo=trade[4], caption=text)
-        else:
-            await context.bot.send_message(chat_id=user_id, text=text)
+        text = f"📅 {trade[1]}\n💱 {trade[2]}\n📊 {trade[3]}"
+        trade_buttons.append(
+            [InlineKeyboardButton(f"{trade[1]} | {trade[2]} | {trade[3]}", callback_data=f"trade_{trade[0]}")]
+        )
+
+    await query.edit_message_text("Choose a trade to see details:", reply_markup=InlineKeyboardMarkup(trade_buttons))
+    return ConversationHandler.END
+
+async def show_trade_details(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    trade_id = int(query.data.split("_")[1])
+
+    c.execute("SELECT date, pair, result, note, screenshot FROM trades WHERE id = ?", (trade_id,))
+    trade = c.fetchone()
+
+    if not trade:
+        await query.edit_message_text("Trade not found.")
+        return ConversationHandler.END
+
+    text = f"📅 {trade[0]}\n💱 {trade[1]}\n📊 {trade[2]}\n📝 {trade[3]}"
+    if trade[4]:
+        await query.edit_message_text(text)
+        await context.bot.send_photo(chat_id=query.from_user.id, photo=trade[4], caption="Screenshot")
+    else:
+        await query.edit_message_text(text)
 
     return ConversationHandler.END
 
@@ -238,6 +261,7 @@ conv_handler = ConversationHandler(
 app.add_handler(CommandHandler("start", start))
 app.add_handler(conv_handler)
 app.add_handler(MessageHandler(filters.Regex("^📊 Winrate$"), winrate))
+app.add_handler(CallbackQueryHandler(show_trade_details, pattern="^trade_.*"))
 app.add_handler(CommandHandler("export", export_trades))
 
-app.run_polling()
+app.run_polling()  # Start the bot
