@@ -2,22 +2,41 @@ import logging
 import sqlite3
 import pandas as pd
 import os
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, InputMediaPhoto
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, CallbackQueryHandler, MessageHandler, filters, ConversationHandler
+from telegram import (
+    Update,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    ReplyKeyboardMarkup,
+    KeyboardButton,
+    InputMediaPhoto,
+)
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+    CallbackQueryHandler,
+    MessageHandler,
+    filters,
+    ConversationHandler,
+)
 from datetime import datetime
 
 # Enable logging
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+)
 logger = logging.getLogger(__name__)
 
 # Define stages
-DATE, PAIR, RESULT, NOTE, SCREENSHOT, HISTORY_YEAR, HISTORY_MONTH = range(7)
+DATE, PAIR, RESULT, NOTE, SCREENSHOT, HISTORY_YEAR, HISTORY_MONTH, HISTORY_FILTER = range(8)
 
 # Connect to SQLite
 conn = sqlite3.connect("trades.db", check_same_thread=False)
 c = conn.cursor()
-c.execute('''CREATE TABLE IF NOT EXISTS trades
-             (id INTEGER PRIMARY KEY, user_id INTEGER, date TEXT, pair TEXT, result TEXT, note TEXT, screenshot TEXT)''')
+c.execute(
+    """CREATE TABLE IF NOT EXISTS trades
+             (id INTEGER PRIMARY KEY, user_id INTEGER, date TEXT, pair TEXT, result TEXT, note TEXT, screenshot TEXT)"""
+)
 conn.commit()
 
 # Start command
@@ -103,32 +122,54 @@ async def select_month(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     month = query.data.split("_")[1]
-    year = context.user_data['year']
+    context.user_data['month'] = month
+    filter_buttons = [
+        [
+            InlineKeyboardButton("🔁 All", callback_data="filter_all"),
+            InlineKeyboardButton("✅ Profit", callback_data="filter_profit"),
+            InlineKeyboardButton("❌ Loss", callback_data="filter_loss"),
+        ]
+    ]
+    await query.edit_message_text("Choose filter:", reply_markup=InlineKeyboardMarkup(filter_buttons))
+    return HISTORY_FILTER
+
+async def filter_trades(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    filter_type = query.data.split("_")[1]
+    year = context.user_data["year"]
+    month = context.user_data["month"]
     user_id = query.from_user.id
 
-    # Log for debugging
-    logger.info(f"Year: {year}, Month: {month}, User ID: {user_id}")
-
-    c.execute("SELECT date, pair, result, note, screenshot FROM trades WHERE user_id = ? AND substr(date, 1, 4) = ? AND substr(date, 6, 2) = ?", (user_id, year, month))
+    c.execute(
+        "SELECT date, pair, result, note, screenshot FROM trades WHERE user_id = ? AND substr(date, 1, 4) = ? AND substr(date, 6, 2) = ?",
+        (user_id, year, month)
+    )
     trades = c.fetchall()
 
+    if filter_type == "profit":
+        trades = [t for t in trades if safe_result_parse(t[2]) > 0]
+    elif filter_type == "loss":
+        trades = [t for t in trades if safe_result_parse(t[2]) < 0]
+
     if not trades:
-        await query.edit_message_text("No trades for this month.")
+        await query.edit_message_text("No trades found for selected filter.")
         return ConversationHandler.END
 
-    messages = []
     for trade in trades:
         text = f"📅 {trade[0]}\n💱 {trade[1]}\n📊 {trade[2]}\n📝 {trade[3]}"
-        messages.append((text, trade[4]))
-
-    for text, screenshot in messages:
-        if screenshot:
-            # Use context.bot instead of query.message.bot
-            await context.bot.send_photo(chat_id=user_id, photo=screenshot, caption=text)
+        if trade[4]:
+            await context.bot.send_photo(chat_id=user_id, photo=trade[4], caption=text)
         else:
             await context.bot.send_message(chat_id=user_id, text=text)
 
     return ConversationHandler.END
+
+def safe_result_parse(result: str) -> float:
+    try:
+        return float(result.replace("%", "").replace("+", "").strip())
+    except:
+        return 0.0
 
 # --- Winrate ---
 async def winrate(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -147,7 +188,6 @@ async def winrate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         rate = wins / total * 100
         await update.message.reply_text(f"Your winrate: {rate:.2f}% ✅")
-
 
 EXPORT_FOLDER = "exports"
 os.makedirs(EXPORT_FOLDER, exist_ok=True)
@@ -172,7 +212,7 @@ async def export_trades(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_document(document=open(file_path, "rb"), filename=f"trades_{user_id}.xlsx")
 
 
-app = ApplicationBuilder().token("8096949835:AAHrXR7aY9QnUr_JJhYb9N06dYdVvMfBhMo").build()
+app = ApplicationBuilder().token("YOUR_BOT_TOKEN_HERE").build()
 
 conv_handler = ConversationHandler(
     entry_points=[
@@ -190,6 +230,7 @@ conv_handler = ConversationHandler(
         ],
         HISTORY_YEAR: [CallbackQueryHandler(select_year, pattern="^year_.*")],
         HISTORY_MONTH: [CallbackQueryHandler(select_month, pattern="^month_.*")],
+        HISTORY_FILTER: [CallbackQueryHandler(filter_trades, pattern="^filter_.*")],
     },
     fallbacks=[CommandHandler("cancel", cancel)]
 )
