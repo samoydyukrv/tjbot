@@ -212,7 +212,7 @@ async def export_trades(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_document(document=open(file_path, "rb"), filename=f"trades_{user_id}.xlsx")
 
 
-app = ApplicationBuilder().token("YOUR_BOT_TOKEN_HERE").build()
+app = ApplicationBuilder().token("8096949835:AAHrXR7aY9QnUr_JJhYb9N06dYdVvMfBhMo").build()
 
 conv_handler = ConversationHandler(
     entry_points=[
