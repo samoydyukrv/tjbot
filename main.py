@@ -142,46 +142,26 @@ async def filter_trades(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = query.from_user.id
 
     c.execute(
-        "SELECT id, date, pair, result, note, screenshot FROM trades WHERE user_id = ? AND substr(date, 1, 4) = ? AND substr(date, 6, 2) = ?",
+        "SELECT date, pair, result, note, screenshot FROM trades WHERE user_id = ? AND substr(date, 1, 4) = ? AND substr(date, 6, 2) = ?",
         (user_id, year, month)
     )
     trades = c.fetchall()
 
     if filter_type == "profit":
-        trades = [t for t in trades if safe_result_parse(t[3]) > 0]
+        trades = [t for t in trades if safe_result_parse(t[2]) > 0]
     elif filter_type == "loss":
-        trades = [t for t in trades if safe_result_parse(t[3]) < 0]
+        trades = [t for t in trades if safe_result_parse(t[2]) < 0]
 
     if not trades:
         await query.edit_message_text("No trades found for selected filter.")
         return ConversationHandler.END
 
-    # Creating buttons with short trade descriptions
-    buttons = []
     for trade in trades:
-        text = f"📅 {trade[1]} | 💱 {trade[2]} | 📊 {trade[3]}"
-        buttons.append([InlineKeyboardButton(text, callback_data=f"trade_{trade[0]}")])
-
-    await query.edit_message_text("Choose a trade:", reply_markup=InlineKeyboardMarkup(buttons))
-    return HISTORY_FILTER
-
-async def show_trade_details(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    trade_id = int(query.data.split("_")[1])
-
-    c.execute("SELECT date, pair, result, note, screenshot FROM trades WHERE id = ?", (trade_id,))
-    trade = c.fetchone()
-
-    if not trade:
-        await query.edit_message_text("Trade not found.")
-        return ConversationHandler.END
-
-    text = f"📅 {trade[0]}\n💱 {trade[1]}\n📊 {trade[2]}\n📝 {trade[3]}"
-    if trade[4]:
-        await context.bot.send_photo(chat_id=query.from_user.id, photo=trade[4], caption=text)
-    else:
-        await context.bot.send_message(chat_id=query.from_user.id, text=text)
+        text = f"📅 {trade[0]}\n💱 {trade[1]}\n📊 {trade[2]}\n📝 {trade[3]}"
+        if trade[4]:
+            await context.bot.send_photo(chat_id=user_id, photo=trade[4], caption=text)
+        else:
+            await context.bot.send_message(chat_id=user_id, text=text)
 
     return ConversationHandler.END
 
@@ -229,30 +209,35 @@ async def export_trades(update: Update, context: ContextTypes.DEFAULT_TYPE):
     file_path = os.path.join(EXPORT_FOLDER, f"user_{user_id}_trades.xlsx")
     df.to_excel(file_path, index=False)
 
-    await update.message.reply_document(document=open(file_path, "rb"), filename="trades.xlsx")
-    os.remove(file_path)
+    await update.message.reply_document(document=open(file_path, "rb"), filename=f"trades_{user_id}.xlsx")
 
-# Main function to setup bot
-def main():
-    application = ApplicationBuilder().token("8096949835:AAHrXR7aY9QnUr_JJhYb9N06dYdVvMfBhMo").build()
 
-    conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("start", start), CommandHandler("add_trade", add_trade), CommandHandler("history", history), CommandHandler("winrate", winrate)],
-        states={
-            DATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_date)],
-            PAIR: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_pair)],
-            RESULT: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_result)],
-            NOTE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_note)],
-            SCREENSHOT: [MessageHandler(filters.PHOTO, handle_screenshot), CommandHandler("skip", skip_screenshot)],
-            HISTORY_YEAR: [CallbackQueryHandler(select_year, pattern="^year_")],
-            HISTORY_MONTH: [CallbackQueryHandler(select_month, pattern="^month_")],
-            HISTORY_FILTER: [CallbackQueryHandler(filter_trades, pattern="^filter_.*"), CallbackQueryHandler(show_trade_details, pattern="^trade_.*")],
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
-    )
+app = ApplicationBuilder().token("8096949835:AAHrXR7aY9QnUr_JJhYb9N06dYdVvMfBhMo").build()
 
-    application.add_handler(conv_handler)
-    application.run_polling()
+conv_handler = ConversationHandler(
+    entry_points=[
+        MessageHandler(filters.Regex("^📈 Add Trade$"), add_trade),
+        MessageHandler(filters.Regex("^📜 History$"), history)
+    ],
+    states={
+        DATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_date)],
+        PAIR: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_pair)],
+        RESULT: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_result)],
+        NOTE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_note)],
+        SCREENSHOT: [
+            MessageHandler(filters.PHOTO, handle_screenshot),
+            CommandHandler("skip", skip_screenshot)
+        ],
+        HISTORY_YEAR: [CallbackQueryHandler(select_year, pattern="^year_.*")],
+        HISTORY_MONTH: [CallbackQueryHandler(select_month, pattern="^month_.*")],
+        HISTORY_FILTER: [CallbackQueryHandler(filter_trades, pattern="^filter_.*")],
+    },
+    fallbacks=[CommandHandler("cancel", cancel)]
+)
 
-if __name__ == "__main__":
-    main()
+app.add_handler(CommandHandler("start", start))
+app.add_handler(conv_handler)
+app.add_handler(MessageHandler(filters.Regex("^📊 Winrate$"), winrate))
+app.add_handler(CommandHandler("export", export_trades))
+
+app.run_polling()
