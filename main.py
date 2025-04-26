@@ -1,6 +1,5 @@
 import logging
 import sqlite3
-import pandas as pd
 import os
 from telegram import (
     Update,
@@ -185,10 +184,58 @@ async def delete_trade(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text("Trade deleted successfully ❌")
     return ConversationHandler.END
 
+# РЕАЛЬНАЯ РАБОЧАЯ РЕДАКТИРОВКА
 async def edit_trade(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    await query.edit_message_text("Editing not implemented yet 🚧")
+    trade_id = context.user_data['trade_id']
+
+    c.execute("SELECT date, pair, result, note FROM trades WHERE id = ?", (trade_id,))
+    trade = c.fetchone()
+    context.user_data['edit_trade'] = {
+        'date': trade[0],
+        'pair': trade[1],
+        'result': trade[2],
+        'note': trade[3],
+    }
+
+    await query.edit_message_text("Enter new date (or leave empty and click 'Next'):")
+    return EDIT_DATE
+
+async def edit_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip()
+    if text:
+        context.user_data['edit_trade']['date'] = text
+    await update.message.reply_text("Enter new pair (or leave empty and click 'Next'):")
+    return EDIT_PAIR
+
+async def edit_pair(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip()
+    if text:
+        context.user_data['edit_trade']['pair'] = text
+    await update.message.reply_text("Enter new result (or leave empty and click 'Next'):")
+    return EDIT_RESULT
+
+async def edit_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip()
+    if text:
+        context.user_data['edit_trade']['result'] = text
+    await update.message.reply_text("Enter new note (or leave empty and click 'Next'):")
+    return EDIT_NOTE
+
+async def edit_note(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip()
+    if text:
+        context.user_data['edit_trade']['note'] = text
+
+    trade_id = context.user_data['trade_id']
+    data = context.user_data['edit_trade']
+    c.execute("""
+        UPDATE trades SET date = ?, pair = ?, result = ?, note = ? WHERE id = ?
+    """, (data['date'], data['pair'], data['result'], data['note'], trade_id))
+    conn.commit()
+
+    await update.message.reply_text("Trade updated successfully ✅")
     return ConversationHandler.END
 
 # Utilities
@@ -234,6 +281,10 @@ conv_handler = ConversationHandler(
             CallbackQueryHandler(delete_trade, pattern="^delete_trade$"),
             CallbackQueryHandler(edit_trade, pattern="^edit_trade$"),
         ],
+        EDIT_DATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_date)],
+        EDIT_PAIR: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_pair)],
+        EDIT_RESULT: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_result)],
+        EDIT_NOTE: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_note)],
     },
     fallbacks=[CommandHandler("cancel", cancel)]
 )
