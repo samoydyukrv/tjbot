@@ -279,18 +279,15 @@ conv_handler = ConversationHandler(
         TRADE_LIST: [CallbackQueryHandler(show_trade_details, pattern="^trade_.*")],
         TRADE_ACTION: [
             CallbackQueryHandler(delete_trade, pattern="^delete_trade$"),
-            CallbackQueryHandler(edit_trade, pattern="^edit_trade$"),
+            CallbackQueryHandler(edit_trade, pattern="^edit_trade$")
         ],
         EDIT_DATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_date)],
         EDIT_PAIR: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_pair)],
         EDIT_RESULT: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_result)],
         EDIT_NOTE: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_note)],
     },
-    fallbacks=[CommandHandler("cancel", cancel)]
+    fallbacks=[CommandHandler("cancel", cancel)],
 )
 
-app.add_handler(CommandHandler("start", start))
 app.add_handler(conv_handler)
-app.add_handler(MessageHandler(filters.Regex("^📊 Winrate$"), winrate))
-
 app.run_polling()
