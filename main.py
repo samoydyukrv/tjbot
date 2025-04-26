@@ -200,7 +200,7 @@ async def winrate(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"Your winrate: {rate:.2f}% ✅")
 
 # App setup
-app = ApplicationBuilder().token("YOUR_TOKEN").build()
+app = ApplicationBuilder().token("8096949835:AAHrXR7aY9QnUr_JJhYb9N06dYdVvMfBhMo").build()
 
 conv_handler = ConversationHandler(
     entry_points=[
