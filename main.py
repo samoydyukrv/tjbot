@@ -16,21 +16,21 @@ from telegram.ext import (
     ContextTypes,
     CallbackQueryHandler,
     MessageHandler,
-    filters,
     ConversationHandler,
+    filters,
 )
 from datetime import datetime
 
-# Enable logging
+# Logging
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# Define stages
-DATE, PAIR, RESULT, NOTE, SCREENSHOT, HISTORY_YEAR, HISTORY_MONTH, HISTORY_FILTER = range(8)
+# Stages
+DATE, PAIR, RESULT, NOTE, SCREENSHOT, HISTORY_YEAR, HISTORY_MONTH, HISTORY_FILTER, TRADE_LIST, TRADE_ACTION = range(10)
 
-# Connect to SQLite
+# Database
 conn = sqlite3.connect("trades.db", check_same_thread=False)
 c = conn.cursor()
 c.execute(
@@ -39,7 +39,7 @@ c.execute(
 )
 conn.commit()
 
-# Start command
+# Start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [[
         KeyboardButton("📈 Add Trade"),
@@ -49,29 +49,29 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     await update.message.reply_text("Welcome to your Trading Journal!", reply_markup=reply_markup)
 
-# Entry point for conversation
+# Add Trade Flow
 async def add_trade(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Enter trade date (YYYY-MM-DD):")
     return DATE
 
 async def handle_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['date'] = update.message.text
-    await update.message.reply_text("Enter trading pair (e.g. XAUUSD):")
+    await update.message.reply_text("Enter trading pair (e.g., XAUUSD):")
     return PAIR
 
 async def handle_pair(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['pair'] = update.message.text
-    await update.message.reply_text("Enter result (e.g. +3.5%):")
+    await update.message.reply_text("Enter result (e.g., +3.5%):")
     return RESULT
 
 async def handle_result(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['result'] = update.message.text
-    await update.message.reply_text("Optional: Add a note for this trade")
+    await update.message.reply_text("Optional: Add a note for this trade:")
     return NOTE
 
 async def handle_note(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['note'] = update.message.text
-    await update.message.reply_text("You can now send a screenshot or type /skip if none")
+    await update.message.reply_text("Send a screenshot or type /skip if none:")
     return SCREENSHOT
 
 async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -96,7 +96,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Trade entry cancelled ❌")
     return ConversationHandler.END
 
-# --- History browsing ---
+# History Flow
 async def history(update: Update, context: ContextTypes.DEFAULT_TYPE):
     c.execute("SELECT DISTINCT substr(date, 1, 4) FROM trades WHERE user_id = ?", (update.effective_user.id,))
     years = [row[0] for row in c.fetchall()]
@@ -123,65 +123,75 @@ async def select_month(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     month = query.data.split("_")[1]
     context.user_data['month'] = month
-    filter_buttons = [
-        [
-            InlineKeyboardButton("🔁 All", callback_data="filter_all"),
-            InlineKeyboardButton("✅ Profit", callback_data="filter_profit"),
-            InlineKeyboardButton("❌ Loss", callback_data="filter_loss"),
-        ]
-    ]
-    await query.edit_message_text("Choose filter:", reply_markup=InlineKeyboardMarkup(filter_buttons))
-    return HISTORY_FILTER
+    await show_trade_list(update, context)
+    return TRADE_LIST
 
-async def filter_trades(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def show_trade_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id if update.message else update.callback_query.from_user.id
+    year = context.user_data['year']
+    month = context.user_data['month']
+    c.execute("SELECT id, date, pair, result FROM trades WHERE user_id = ? AND substr(date, 1, 4) = ? AND substr(date, 6, 2) = ?",
+              (user_id, year, month))
+    trades = c.fetchall()
+    if not trades:
+        await update.callback_query.edit_message_text("No trades found.")
+        return ConversationHandler.END
+    buttons = [
+        [InlineKeyboardButton(f"{trade[1]} {trade[2]} {trade[3]}", callback_data=f"trade_{trade[0]}")]
+        for trade in trades
+    ]
+    await update.callback_query.edit_message_text("Choose a trade:", reply_markup=InlineKeyboardMarkup(buttons))
+    return TRADE_ACTION
+
+async def show_trade_details(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    filter_type = query.data.split("_")[1]
-    year = context.user_data["year"]
-    month = context.user_data["month"]
-    user_id = query.from_user.id
+    trade_id = query.data.split("_")[1]
+    context.user_data['trade_id'] = trade_id
 
-    c.execute(
-        "SELECT date, pair, result, note, screenshot FROM trades WHERE user_id = ? AND substr(date, 1, 4) = ? AND substr(date, 6, 2) = ?",
-        (user_id, year, month)
-    )
-    trades = c.fetchall()
-
-    if filter_type == "profit":
-        trades = [t for t in trades if safe_result_parse(t[2]) > 0]
-    elif filter_type == "loss":
-        trades = [t for t in trades if safe_result_parse(t[2]) < 0]
-
-    if not trades:
-        await query.edit_message_text("No trades found for selected filter.")
+    c.execute("SELECT date, pair, result, note, screenshot FROM trades WHERE id = ?", (trade_id,))
+    trade = c.fetchone()
+    if not trade:
+        await query.edit_message_text("Trade not found.")
         return ConversationHandler.END
 
-    for trade in trades:
-        text = f"📅 {trade[0]}\n💱 {trade[1]}\n📊 {trade[2]}\n📝 {trade[3]}"
-        if trade[4]:
-            await context.bot.send_photo(chat_id=user_id, photo=trade[4], caption=text)
-        else:
-            await context.bot.send_message(chat_id=user_id, text=text)
+    text = f"📅 Date: {trade[0]}\n💱 Pair: {trade[1]}\n📊 Result: {trade[2]}\n📝 Note: {trade[3]}"
+    buttons = [
+        [InlineKeyboardButton("✏️ Edit", callback_data="edit_trade"), InlineKeyboardButton("❌ Delete", callback_data="delete_trade")]
+    ]
+    if trade[4]:
+        await query.message.reply_photo(photo=trade[4], caption=text, reply_markup=InlineKeyboardMarkup(buttons))
+    else:
+        await query.edit_message_text(text=text, reply_markup=InlineKeyboardMarkup(buttons))
+    return TRADE_ACTION
 
+async def delete_trade(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    trade_id = context.user_data['trade_id']
+    c.execute("DELETE FROM trades WHERE id = ?", (trade_id,))
+    conn.commit()
+    await query.edit_message_text("Trade deleted successfully ❌")
     return ConversationHandler.END
 
+async def edit_trade(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    await query.edit_message_text("Enter new result (e.g., +2.5%):")
+    return RESULT
+
+# Utilities
 def safe_result_parse(result: str) -> float:
     try:
         return float(result.replace("%", "").replace("+", "").strip())
     except:
         return 0.0
 
-# --- Winrate ---
+# Winrate
 async def winrate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     c.execute("SELECT result FROM trades WHERE user_id = ?", (update.effective_user.id,))
     results = c.fetchall()
-    wins = 0
-    for r in results:
-        try:
-            if float(r[0].replace('%', '')) > 0:
-                wins += 1
-        except:
-            continue
+    wins = sum(1 for r in results if safe_result_parse(r[0]) > 0)
     total = len(results)
     if total == 0:
         await update.message.reply_text("No trades found.")
@@ -189,30 +199,8 @@ async def winrate(update: Update, context: ContextTypes.DEFAULT_TYPE):
         rate = wins / total * 100
         await update.message.reply_text(f"Your winrate: {rate:.2f}% ✅")
 
-EXPORT_FOLDER = "exports"
-os.makedirs(EXPORT_FOLDER, exist_ok=True)
-
-async def export_trades(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    conn = sqlite3.connect("trades.db")
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT date, pair, result, note FROM trades WHERE user_id = ?", (user_id,))
-    rows = cursor.fetchall()
-    conn.close()
-
-    if not rows:
-        await update.message.reply_text("You don’t have any saved trades yet.")
-        return
-
-    df = pd.DataFrame(rows, columns=["Date", "Pair", "Result", "Note"])
-    file_path = os.path.join(EXPORT_FOLDER, f"user_{user_id}_trades.xlsx")
-    df.to_excel(file_path, index=False)
-
-    await update.message.reply_document(document=open(file_path, "rb"), filename=f"trades_{user_id}.xlsx")
-
-
-app = ApplicationBuilder().token("8096949835:AAHrXR7aY9QnUr_JJhYb9N06dYdVvMfBhMo").build()
+# App setup
+app = ApplicationBuilder().token("YOUR_TOKEN").build()
 
 conv_handler = ConversationHandler(
     entry_points=[
@@ -230,7 +218,11 @@ conv_handler = ConversationHandler(
         ],
         HISTORY_YEAR: [CallbackQueryHandler(select_year, pattern="^year_.*")],
         HISTORY_MONTH: [CallbackQueryHandler(select_month, pattern="^month_.*")],
-        HISTORY_FILTER: [CallbackQueryHandler(filter_trades, pattern="^filter_.*")],
+        TRADE_LIST: [CallbackQueryHandler(show_trade_details, pattern="^trade_.*")],
+        TRADE_ACTION: [
+            CallbackQueryHandler(delete_trade, pattern="^delete_trade$"),
+            CallbackQueryHandler(edit_trade, pattern="^edit_trade$"),
+        ],
     },
     fallbacks=[CommandHandler("cancel", cancel)]
 )
@@ -238,6 +230,5 @@ conv_handler = ConversationHandler(
 app.add_handler(CommandHandler("start", start))
 app.add_handler(conv_handler)
 app.add_handler(MessageHandler(filters.Regex("^📊 Winrate$"), winrate))
-app.add_handler(CommandHandler("export", export_trades))
 
 app.run_polling()
