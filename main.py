@@ -265,12 +265,36 @@ async def edit_trade(call: CallbackQuery, state: FSMContext):
     )
     await call.message.edit_text("Choose a field to edit:", reply_markup=keyboard)
 
-@dp.callback_query(lambda c: c.data.startswith("editfield_"))
-async def edit_field(call: CallbackQuery, state: FSMContext):
-    field = call.data.split("_")[1]
-    await state.update_data(edit_field=field)
-    await call.message.edit_text(f"Send new {field} or type 'Skip':", reply_markup=cancel_keyboard)
-    await state.set_state(EditTrade.value)
+# @dp.callback_query(lambda c: c.data.startswith("editfield_"))
+# async def edit_field(call: CallbackQuery, state: FSMContext):
+#     field = call.data.split("_")[1]
+#     await state.update_data(edit_field=field)
+#     await call.message.edit_text(f"Send new {field} or type 'Skip':", reply_markup=cancel_keyboard)
+#     await state.set_state(EditTrade.value)
+
+@dp.callback_query(lambda call: call.data.startswith("edit_"))
+async def edit_field(call: CallbackQuery):
+    field = call.data.split("_", 1)[1]
+
+    cancel_keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Cancel", callback_data="cancel_edit")]
+        ]
+    )
+
+    await call.message.edit_text(
+        f"Send new {field} or type 'Skip':",
+        reply_markup=cancel_keyboard
+    )
+
+    await state.set_state(EditTrade.waiting_for_new_value)
+    await state.update_data(field_to_edit=field)
+
+@dp.callback_query(lambda call: call.data == "cancel_edit")
+async def cancel_edit(call: CallbackQuery, state: FSMContext):
+    await call.message.edit_text("Edit canceled.")
+    await state.clear()
+
 
 @dp.message(EditTrade.value)
 async def save_edit(message: types.Message, state: FSMContext):
