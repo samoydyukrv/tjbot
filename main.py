@@ -1,23 +1,24 @@
 import asyncio
 import json
 import os
+from datetime import datetime
+
 from aiogram import Bot, Dispatcher, types
 from aiogram.enums import ParseMode
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, InputFile
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.fsm.storage.memory import MemoryStorage
-from datetime import datetime
+from aiogram.types import CallbackQuery, InputFile
 
+# Constants
 TOKEN = '8096949835:AAHrXR7aY9QnUr_JJhYb9N06dYdVvMfBhMo'
+DB_FILE = 'trades.json'
 
 bot = Bot(token=TOKEN, parse_mode=ParseMode.HTML)
 dp = Dispatcher(storage=MemoryStorage())
 
-DB_FILE = 'trades.json'
-
-# FSM states
+# FSM States
 class AddTrade(StatesGroup):
     date = State()
     pair = State()
@@ -70,7 +71,7 @@ def edit_delete_keyboard(trade_id):
         ]
     )
 
-# Helper functions
+# Helpers
 def load_trades():
     if not os.path.exists(DB_FILE):
         return []
@@ -131,8 +132,7 @@ async def add_trade_screenshot(message: types.Message, state: FSMContext):
 
     screenshot = None
     if message.photo:
-        file_id = message.photo[-1].file_id
-        screenshot = file_id
+        screenshot = message.photo[-1].file_id
     elif message.text.lower() != 'skip':
         screenshot = message.text
 
@@ -159,12 +159,11 @@ async def history_start(message: types.Message, state: FSMContext):
         return
 
     years = sorted(set(t['date'][:4] for t in trades))
-    keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
-        [types.InlineKeyboardButton(text=year, callback_data=f"year_{year}")] for year in years
-    ])
-    keyboard.inline_keyboard.append(
-        [types.InlineKeyboardButton(text="Back", callback_data="back"),
-         types.InlineKeyboardButton(text="Cancel", callback_data="cancel")]
+    keyboard = types.InlineKeyboardMarkup(
+        inline_keyboard=[[types.InlineKeyboardButton(text=year, callback_data=f"year_{year}")] for year in years] + [
+            [types.InlineKeyboardButton(text="Back", callback_data="back"),
+             types.InlineKeyboardButton(text="Cancel", callback_data="cancel")]
+        ]
     )
     await message.answer("Choose a year:", reply_markup=keyboard)
 
@@ -174,12 +173,11 @@ async def choose_year(call: CallbackQuery, state: FSMContext):
     trades = load_trades()
     months = sorted(set(t['date'][5:7] for t in trades if t['date'].startswith(year)))
 
-    keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
-        [types.InlineKeyboardButton(text=month, callback_data=f"month_{year}_{month}")] for month in months
-    ])
-    keyboard.inline_keyboard.append(
-        [types.InlineKeyboardButton(text="Back", callback_data="back"),
-         types.InlineKeyboardButton(text="Cancel", callback_data="cancel")]
+    keyboard = types.InlineKeyboardMarkup(
+        inline_keyboard=[[types.InlineKeyboardButton(text=month, callback_data=f"month_{year}_{month}")] for month in months] + [
+            [types.InlineKeyboardButton(text="Back", callback_data="back"),
+             types.InlineKeyboardButton(text="Cancel", callback_data="cancel")]
+        ]
     )
     await call.message.edit_text("Choose a month:", reply_markup=keyboard)
 
@@ -198,8 +196,7 @@ async def filter_trades(call: CallbackQuery, state: FSMContext):
 
     trades = load_trades()
     filtered = [
-        t for t in trades
-        if t['date'].startswith(f"{year}-{month}")
+        t for t in trades if t['date'].startswith(f"{year}-{month}")
     ]
 
     if filter_type == "profitable":
@@ -217,11 +214,10 @@ async def filter_trades(call: CallbackQuery, state: FSMContext):
                 text=f"{t['date']} | {t['pair']} | {t['result']}%",
                 callback_data=f"view_{t['id']}"
             )] for t in filtered
+        ] + [
+            [types.InlineKeyboardButton(text="Back", callback_data="back"),
+             types.InlineKeyboardButton(text="Cancel", callback_data="cancel")]
         ]
-    )
-    keyboard.inline_keyboard.append(
-        [types.InlineKeyboardButton(text="Back", callback_data="back"),
-         types.InlineKeyboardButton(text="Cancel", callback_data="cancel")]
     )
 
     await call.message.edit_text("Choose a trade:", reply_markup=keyboard)
@@ -273,34 +269,25 @@ async def edit_field(call: CallbackQuery, state: FSMContext):
     await state.set_state(EditTrade.value)
 
 @dp.message(EditTrade.value)
-async def save_edit_field(message: types.Message, state: FSMContext):
+async def save_edited_field(message: types.Message, state: FSMContext):
     data = await state.get_data()
-    trades = load_trades()
     trade_id = data['editing_id']
     field = data['edit_field']
+    trades = load_trades()
 
     for trade in trades:
         if trade['id'] == trade_id:
-            if message.text.lower() != 'skip':
-                if field == 'screenshot' and message.photo:
-                    trade[field] = message.photo[-1].file_id
-                else:
-                    trade[field] = message.text
+            if field == "screenshot" and message.photo:
+                trade[field] = message.photo[-1].file_id
+            elif message.text.lower() != "skip":
+                trade[field] = message.text
             break
 
     save_trades(trades)
-
-    await message.answer("Trade updated!", reply_markup=main_keyboard)
+    await message.answer("Trade updated successfully!", reply_markup=main_keyboard)
     await state.clear()
 
-@dp.callback_query(lambda c: c.data.startswith("delete_"))
-async def delete_trade(call: CallbackQuery, state: FSMContext):
-    trade_id = call.data.split("_")[1]
-    trades = load_trades()
-    trades = [t for t in trades if t['id'] != trade_id]
-    save_trades(trades)
-    await call.message.edit_text("Trade deleted.", reply_markup=main_keyboard)
-
+# Start polling
 async def main():
     await dp.start_polling(bot)
 
