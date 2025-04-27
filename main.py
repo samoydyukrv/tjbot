@@ -265,58 +265,32 @@ async def edit_trade(call: CallbackQuery, state: FSMContext):
     )
     await call.message.edit_text("Choose a field to edit:", reply_markup=keyboard)
 
-# @dp.callback_query(lambda c: c.data.startswith("editfield_"))
-# async def edit_field(call: CallbackQuery, state: FSMContext):
-#     field = call.data.split("_")[1]
-#     await state.update_data(edit_field=field)
-#     await call.message.edit_text(f"Send new {field} or type 'Skip':", reply_markup=cancel_keyboard)
-#     await state.set_state(EditTrade.value)
-
-@dp.callback_query(lambda call: call.data.startswith("edit_"))
-async def edit_field(call: CallbackQuery):
-    field = call.data.split("_", 1)[1]
-
-    cancel_keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="❌ Cancel", callback_data="cancel_edit")]
-        ]
-    )
-
-    await call.message.edit_text(
-        f"Send new {field} or type 'Skip':",
-        reply_markup=cancel_keyboard
-    )
-
-    await state.set_state(EditTrade.waiting_for_new_value)
-    await state.update_data(field_to_edit=field)
-
-@dp.callback_query(lambda call: call.data == "cancel_edit")
-async def cancel_edit(call: CallbackQuery, state: FSMContext):
-    await call.message.edit_text("Edit canceled.")
-    await state.clear()
-
+@dp.callback_query(lambda c: c.data.startswith("editfield_"))
+async def edit_field(call: CallbackQuery, state: FSMContext):
+    field = call.data.split("_")[1]
+    await state.update_data(edit_field=field)
+    await call.message.edit_text(f"Send new {field} value or type 'Skip':", reply_markup=cancel_keyboard)
+    await state.set_state(EditTrade.value)
 
 @dp.message(EditTrade.value)
-async def save_edit(message: types.Message, state: FSMContext):
+async def save_edit_field(message: types.Message, state: FSMContext):
     data = await state.get_data()
+    trades = load_trades()
     trade_id = data['editing_id']
     field = data['edit_field']
-    trades = load_trades()
 
-    trade = next((t for t in trades if t['id'] == trade_id), None)
-    if not trade:
-        await message.answer("Trade not found.", reply_markup=main_keyboard)
-        await state.clear()
-        return
-
-    if message.text.lower() != "skip":
-        if field == "screenshot" and message.photo:
-            trade[field] = message.photo[-1].file_id
-        else:
-            trade[field] = message.text
+    for trade in trades:
+        if trade['id'] == trade_id:
+            if message.text.lower() != 'skip':
+                if field == 'screenshot' and message.photo:
+                    trade[field] = message.photo[-1].file_id
+                else:
+                    trade[field] = message.text
+            break
 
     save_trades(trades)
-    await message.answer("Trade updated.", reply_markup=main_keyboard)
+
+    await message.answer("Trade updated!", reply_markup=main_keyboard)
     await state.clear()
 
 @dp.callback_query(lambda c: c.data.startswith("delete_"))
@@ -326,11 +300,6 @@ async def delete_trade(call: CallbackQuery, state: FSMContext):
     trades = [t for t in trades if t['id'] != trade_id]
     save_trades(trades)
     await call.message.edit_text("Trade deleted.", reply_markup=main_keyboard)
-
-@dp.callback_query(lambda c: c.data in ["back", "cancel"])
-async def back_cancel(call: CallbackQuery, state: FSMContext):
-    await state.clear()
-    await call.message.answer("Operation canceled.", reply_markup=main_keyboard)
 
 async def main():
     await dp.start_polling(bot)
