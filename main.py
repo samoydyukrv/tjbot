@@ -177,17 +177,17 @@ async def add_trade_start(callback: types.CallbackQuery, state: FSMContext):
     await state.set_state(AddTrade.year)
     await callback.message.answer("Enter year (e.g., 2025):")
 
-# @dp.message(AddTrade.year)
-# async def add_trade_year(message: types.Message, state: FSMContext):
-#     await state.update_data(year=int(message.text))
-#     await state.set_state(AddTrade.month)
-#     await message.answer("Enter month (e.g., 4):")
+@dp.message(AddTrade.year)
+async def add_trade_year(message: types.Message, state: FSMContext):
+    await state.update_data(year=int(message.text))
+    await state.set_state(AddTrade.month)
+    await message.answer("Enter month (e.g., 4):")
 
-# @dp.message(AddTrade.month)
-# async def add_trade_month(message: types.Message, state: FSMContext):
-#     await state.update_data(month=int(message.text))
-#     await state.set_state(AddTrade.date)
-#     await message.answer("Enter date (e.g., 2025-04-27):")
+@dp.message(AddTrade.month)
+async def add_trade_month(message: types.Message, state: FSMContext):
+    await state.update_data(month=int(message.text))
+    await state.set_state(AddTrade.date)
+    await message.answer("Enter date (e.g., 2025-04-27):")
 
 @dp.message(AddTrade.date)
 async def add_trade_date(message: types.Message, state: FSMContext):
