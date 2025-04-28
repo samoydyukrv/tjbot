@@ -303,7 +303,7 @@ async def init_db():
     )
     async with db_pool.acquire() as conn:
         await conn.execute("""
-            CREATE TABLE IF NOT EXISTS trades (
+            CREATE TABLE IF NOT EXISTS trades_main (
                 id SERIAL PRIMARY KEY,
                 year INTEGER,
                 month INTEGER,
@@ -314,7 +314,7 @@ async def init_db():
                 screenshot TEXT
             );
         """)
-    print("✅ Database initialized and table 'trades' created.")
+    print("✅ Database initialized and table 'trades_main' created.")
 
 # --- States ---
 class AddTrade(StatesGroup):
@@ -332,17 +332,17 @@ class EditTrade(StatesGroup):
 # --- Helper functions ---
 async def get_years():
     async with db_pool.acquire() as conn:
-        rows = await conn.fetch("SELECT DISTINCT year FROM trades ORDER BY year DESC")
+        rows = await conn.fetch("SELECT DISTINCT year FROM trades_main ORDER BY year DESC")
         return [str(row["year"]) for row in rows]
 
 async def get_months(year):
     async with db_pool.acquire() as conn:
-        rows = await conn.fetch("SELECT DISTINCT month FROM trades WHERE year = $1 ORDER BY month DESC", year)
+        rows = await conn.fetch("SELECT DISTINCT month FROM trades_main WHERE year = $1 ORDER BY month DESC", year)
         return [str(row["month"]) for row in rows]
 
 async def get_trades(year, month, filter_type):
     async with db_pool.acquire() as conn:
-        query = "SELECT id, date, pair, percent FROM trades WHERE year = $1 AND month = $2"
+        query = "SELECT id, date, pair, percent FROM trades_main WHERE year = $1 AND month = $2"
         if filter_type == "profitable":
             query += " AND CAST(percent AS FLOAT) > 0"
         elif filter_type == "losing":
@@ -353,22 +353,22 @@ async def get_trades(year, month, filter_type):
 
 async def get_trade(trade_id):
     async with db_pool.acquire() as conn:
-        return await conn.fetchrow("SELECT * FROM trades WHERE id = $1", trade_id)
+        return await conn.fetchrow("SELECT * FROM trades_main WHERE id = $1", trade_id)
 
 async def add_trade(year, month, date, pair, percent, comment, screenshot):
     async with db_pool.acquire() as conn:
         await conn.execute("""
-            INSERT INTO trades (year, month, date, pair, percent, comment, screenshot)
+            INSERT INTO trades_main (year, month, date, pair, percent, comment, screenshot)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
         """, year, month, date, pair, percent, comment, screenshot)
 
 async def update_trade(trade_id, field, value):
     async with db_pool.acquire() as conn:
-        await conn.execute(f"UPDATE trades SET {field} = $1 WHERE id = $2", value, trade_id)
+        await conn.execute(f"UPDATE trades_main SET {field} = $1 WHERE id = $2", value, trade_id)
 
 async def delete_trade(trade_id):
     async with db_pool.acquire() as conn:
-        await conn.execute("DELETE FROM trades WHERE id = $1", trade_id)
+        await conn.execute("DELETE FROM trades_main WHERE id = $1", trade_id)
 
 # --- Keyboards ---
 def main_menu():
