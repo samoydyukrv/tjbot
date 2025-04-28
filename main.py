@@ -431,22 +431,75 @@ async def select_filter(callback: types.CallbackQuery):
     builder.adjust(1)
     await callback.message.edit_text("Select trade:", reply_markup=builder.as_markup())
 
+# @dp.callback_query(F.data.startswith("trade_"))
+# async def view_trade(callback: types.CallbackQuery):
+#     trade_id = int(callback.data.split("_")[1])
+#     trade = await get_trade(trade_id)
+#     if not trade:
+#         await callback.message.answer("Trade not found.", reply_markup=main_menu())
+#         return
+#     text = f"**Date:** {trade['date']}\n**Pair:** {trade['pair']}\n**Percent:** {trade['percent']}%\n**Comment:** {trade['comment']}"
+#     builder = InlineKeyboardBuilder()
+#     if trade['screenshot']:
+#         # builder.button(text="Screenshot", url=trade['screenshot'])
+#         if trade['screenshot']:
+#             # если есть скриншот - отправляем фото
+#             await callback.message.answer_photo(
+#                 photo=trade['screenshot'],
+#                 caption=text,
+#                 parse_mode="Markdown",
+#                 reply_markup=builder.as_markup()
+#             )
+#         else:
+#             # если нет скрина - просто текст
+#             await callback.message.answer(
+#                 text,
+#                 parse_mode="Markdown",
+#                 reply_markup=builder.as_markup()
+#             )
+#     builder.button(text="Edit", callback_data=f"edit_{trade_id}")
+#     builder.button(text="Delete", callback_data=f"delete_{trade_id}")
+#     builder.button(text="Back", callback_data=f"filter_{trade['year']}_{trade['month']}_all")
+#     builder.adjust(2)
+#     await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=builder.as_markup())
+
 @dp.callback_query(F.data.startswith("trade_"))
 async def view_trade(callback: types.CallbackQuery):
     trade_id = int(callback.data.split("_")[1])
     trade = await get_trade(trade_id)
+    
     if not trade:
         await callback.message.answer("Trade not found.", reply_markup=main_menu())
         return
-    text = f"**Date:** {trade['date']}\n**Pair:** {trade['pair']}\n**Percent:** {trade['percent']}%\n**Comment:** {trade['comment']}"
+
+    text = (
+        f"**Date:** {trade['date']}\n"
+        f"**Pair:** {trade['pair']}\n"
+        f"**Percent:** {trade['percent']}%\n"
+        f"**Comment:** {trade['comment']}"
+    )
+
     builder = InlineKeyboardBuilder()
-    if trade['screenshot']:
-        builder.button(text="Screenshot", url=trade['screenshot'])
     builder.button(text="Edit", callback_data=f"edit_{trade_id}")
     builder.button(text="Delete", callback_data=f"delete_{trade_id}")
     builder.button(text="Back", callback_data=f"filter_{trade['year']}_{trade['month']}_all")
     builder.adjust(2)
-    await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=builder.as_markup())
+
+    if trade['screenshot']:
+        # если есть скриншот - отправляем фото
+        await callback.message.answer_photo(
+            photo=trade['screenshot'],
+            caption=text,
+            parse_mode="Markdown",
+            reply_markup=builder.as_markup()
+        )
+    else:
+        # если нет скрина - просто текст
+        await callback.message.answer(
+            text,
+            parse_mode="Markdown",
+            reply_markup=builder.as_markup()
+        )
 
 @dp.callback_query(F.data.startswith("delete_"))
 async def confirm_delete(callback: types.CallbackQuery):
