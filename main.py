@@ -29,8 +29,8 @@ conn.commit()
 
 # --- States ---
 class AddTrade(StatesGroup):
-    # year = State()
-    # month = State()
+    year = State()
+    month = State()
     date = State()
     pair = State()
     percent = State()
