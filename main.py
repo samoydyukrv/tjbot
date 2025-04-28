@@ -13,11 +13,23 @@ dp = Dispatcher()
 # --- Database setup ---
 conn = sqlite3.connect("trades.db")
 cursor = conn.cursor()
+# cursor.execute("""
+# CREATE TABLE IF NOT EXISTS trades (
+#     id INTEGER PRIMARY KEY AUTOINCREMENT,
+#     # year INTEGER,
+#     # month INTEGER,
+#     date TEXT,
+#     pair TEXT,
+#     percent TEXT,
+#     comment TEXT,
+#     screenshot TEXT
+# )
+# """)
+# conn.commit()
+
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS trades (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    # year INTEGER,
-    # month INTEGER,
     date TEXT,
     pair TEXT,
     percent TEXT,
