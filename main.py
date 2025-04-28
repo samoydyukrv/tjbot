@@ -7,7 +7,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-bot = Bot(token="YOUR_TOKEN")
+bot = Bot(token="8096949835:AAHrXR7aY9QnUr_JJhYb9N06dYdVvMfBhMo")
 dp = Dispatcher()
 
 # --- Database setup ---
