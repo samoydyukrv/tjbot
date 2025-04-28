@@ -70,7 +70,7 @@ def get_trade(trade_id):
 #                    (year, month, date, pair, percent, comment, screenshot))
 #     conn.commit()
 
- def add_trade(date, pair, percent, comment, screenshot):
+def add_trade(date, pair, percent, comment, screenshot):
     cursor.execute("INSERT INTO trades (date, pair, percent, comment, screenshot) VALUES (?, ?, ?, ?, ?)",
                    (date, pair, percent, comment, screenshot))
     conn.commit()
