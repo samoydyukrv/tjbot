@@ -521,21 +521,6 @@ async def add_trade_screenshot(message: types.Message, state: FSMContext):
     await state.clear()
     await message.answer("Trade added successfully!", reply_markup=main_menu())
 
-
-# --- Editing trades ---
-# @dp.callback_query(F.data.startswith("edit_"))
-# async def edit_trade_start(callback: types.CallbackQuery, state: FSMContext):
-#     trade_id = int(callback.data.split("_")[-1])
-#     print('edit_trade_start---------------->', callback.data)
-#     await state.update_data(edit_id=trade_id)
-#     builder = InlineKeyboardBuilder()
-#     fields = ["date", "pair", "percent", "comment", "screenshot"]
-#     for field in fields:
-#         builder.button(text=f"Edit {field.capitalize()}", callback_data=f"edit_field_{field}")
-#     builder.button(text="Cancel", callback_data=f"trade_{trade_id}")
-#     builder.adjust(1)
-#     await callback.message.edit_text("Select field to edit:", reply_markup=builder.as_markup())
-
 @dp.callback_query(F.data.startswith("edit_field_"))
 async def edit_field_choose(callback: types.CallbackQuery, state: FSMContext):
     field = callback.data.split("_")[-1]
@@ -560,7 +545,7 @@ async def edit_trade_start(callback: types.CallbackQuery, state: FSMContext):
 @dp.message(EditTrade.waiting_value)
 async def edit_field_value(message: types.Message, state: FSMContext):
     data = await state.get_data()
-    update_trade(data["edit_id"], data["edit_field"], message.text)
+    await update_trade(data["edit_id"], data["edit_field"], message.text)
     await state.clear()
     await message.answer(f"{data['edit_field'].capitalize()} updated.", reply_markup=main_menu())
 
