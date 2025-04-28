@@ -1,11 +1,13 @@
 import asyncio
 import sqlite3
-from aiogram import Bot, Dispatcher, types
+from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-bot = Bot(token="8096949835:AAHrXR7aY9QnUr_JJhYb9N06dYdVvMfBhMo")
+bot = Bot(token="YOUR_TOKEN")
 dp = Dispatcher()
 
 # --- Database setup ---
@@ -24,6 +26,19 @@ CREATE TABLE IF NOT EXISTS trades (
 )
 """)
 conn.commit()
+
+# --- States ---
+class AddTrade(StatesGroup):
+    year = State()
+    month = State()
+    date = State()
+    pair = State()
+    percent = State()
+    comment = State()
+    screenshot = State()
+
+class EditTrade(StatesGroup):
+    waiting_value = State()
 
 # --- Helper functions ---
 def get_years():
@@ -62,11 +77,7 @@ def delete_trade(trade_id):
     cursor.execute("DELETE FROM trades WHERE id = ?", (trade_id,))
     conn.commit()
 
-# --- Handlers ---
-@dp.message(Command("start"))
-async def cmd_start(message: types.Message):
-    await message.answer("Welcome to your trading journal!", reply_markup=main_menu())
-
+# --- Keyboards ---
 def main_menu():
     builder = InlineKeyboardBuilder()
     builder.button(text="Add trade", callback_data="add_trade")
@@ -74,7 +85,12 @@ def main_menu():
     builder.adjust(1)
     return builder.as_markup()
 
-@dp.callback_query(lambda c: c.data == "view_history")
+# --- Handlers ---
+@dp.message(Command("start"))
+async def cmd_start(message: types.Message):
+    await message.answer("Welcome to your trading journal!", reply_markup=main_menu())
+
+@dp.callback_query(F.data == "view_history")
 async def view_history(callback: types.CallbackQuery):
     years = get_years()
     if not years:
@@ -87,7 +103,7 @@ async def view_history(callback: types.CallbackQuery):
     builder.adjust(2)
     await callback.message.edit_text("Select year:", reply_markup=builder.as_markup())
 
-@dp.callback_query(lambda c: c.data.startswith("year_"))
+@dp.callback_query(F.data.startswith("year_"))
 async def select_year(callback: types.CallbackQuery):
     year = int(callback.data.split("_")[1])
     months = get_months(year)
@@ -98,7 +114,7 @@ async def select_year(callback: types.CallbackQuery):
     builder.adjust(3)
     await callback.message.edit_text(f"Select month for {year}:", reply_markup=builder.as_markup())
 
-@dp.callback_query(lambda c: c.data.startswith("month_"))
+@dp.callback_query(F.data.startswith("month_"))
 async def select_month(callback: types.CallbackQuery):
     parts = callback.data.split("_")
     year, month = parts[1], parts[2]
@@ -110,7 +126,7 @@ async def select_month(callback: types.CallbackQuery):
     builder.adjust(1)
     await callback.message.edit_text(f"Choose filter for {year}/{month}:", reply_markup=builder.as_markup())
 
-@dp.callback_query(lambda c: c.data.startswith("filter_"))
+@dp.callback_query(F.data.startswith("filter_"))
 async def select_filter(callback: types.CallbackQuery):
     _, year, month, filter_type = callback.data.split("_")
     trades = get_trades(int(year), int(month), filter_type)
@@ -122,7 +138,7 @@ async def select_filter(callback: types.CallbackQuery):
     builder.adjust(1)
     await callback.message.edit_text("Select trade:", reply_markup=builder.as_markup())
 
-@dp.callback_query(lambda c: c.data.startswith("trade_"))
+@dp.callback_query(F.data.startswith("trade_"))
 async def view_trade(callback: types.CallbackQuery):
     trade_id = int(callback.data.split("_")[1])
     trade = get_trade(trade_id)
@@ -140,7 +156,7 @@ async def view_trade(callback: types.CallbackQuery):
     builder.adjust(2)
     await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=builder.as_markup())
 
-@dp.callback_query(lambda c: c.data.startswith("delete_"))
+@dp.callback_query(F.data.startswith("delete_"))
 async def confirm_delete(callback: types.CallbackQuery):
     trade_id = int(callback.data.split("_")[1])
     builder = InlineKeyboardBuilder()
@@ -149,83 +165,96 @@ async def confirm_delete(callback: types.CallbackQuery):
     builder.adjust(2)
     await callback.message.edit_text("Are you sure you want to delete this trade?", reply_markup=builder.as_markup())
 
-@dp.callback_query(lambda c: c.data.startswith("confirm_delete_"))
+@dp.callback_query(F.data.startswith("confirm_delete_"))
 async def delete_confirmed(callback: types.CallbackQuery):
     trade_id = int(callback.data.split("_")[2])
     delete_trade(trade_id)
     await callback.message.answer("Trade deleted.", reply_markup=main_menu())
 
-@dp.callback_query(lambda c: c.data.startswith("edit_"))
-async def start_edit(callback: types.CallbackQuery):
+# --- Adding trades ---
+@dp.callback_query(F.data == "add_trade")
+async def add_trade_start(callback: types.CallbackQuery, state: FSMContext):
+    await state.set_state(AddTrade.year)
+    await callback.message.answer("Enter year (e.g., 2025):")
+
+@dp.message(AddTrade.year)
+async def add_trade_year(message: types.Message, state: FSMContext):
+    await state.update_data(year=int(message.text))
+    await state.set_state(AddTrade.month)
+    await message.answer("Enter month (e.g., 4):")
+
+@dp.message(AddTrade.month)
+async def add_trade_month(message: types.Message, state: FSMContext):
+    await state.update_data(month=int(message.text))
+    await state.set_state(AddTrade.date)
+    await message.answer("Enter date (e.g., 2025-04-27):")
+
+@dp.message(AddTrade.date)
+async def add_trade_date(message: types.Message, state: FSMContext):
+    await state.update_data(date=message.text)
+    await state.set_state(AddTrade.pair)
+    await message.answer("Enter pair (e.g., BTC/USD):")
+
+@dp.message(AddTrade.pair)
+async def add_trade_pair(message: types.Message, state: FSMContext):
+    await state.update_data(pair=message.text)
+    await state.set_state(AddTrade.percent)
+    await message.answer("Enter percent (e.g., 5 or -3):")
+
+@dp.message(AddTrade.percent)
+async def add_trade_percent(message: types.Message, state: FSMContext):
+    await state.update_data(percent=message.text)
+    await state.set_state(AddTrade.comment)
+    await message.answer("Enter comment (or '-' if none):")
+
+@dp.message(AddTrade.comment)
+async def add_trade_comment(message: types.Message, state: FSMContext):
+    await state.update_data(comment=message.text)
+    await state.set_state(AddTrade.screenshot)
+    await message.answer("Send screenshot URL (or '-' if none):")
+
+@dp.message(AddTrade.screenshot)
+async def add_trade_screenshot(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    screenshot = None if message.text == "-" else message.text
+    add_trade(
+        data["year"],
+        data["month"],
+        data["date"],
+        data["pair"],
+        data["percent"],
+        data["comment"],
+        screenshot
+    )
+    await state.clear()
+    await message.answer("Trade added successfully!", reply_markup=main_menu())
+
+# --- Editing trades ---
+@dp.callback_query(F.data.startswith("edit_"))
+async def edit_trade_start(callback: types.CallbackQuery, state: FSMContext):
     trade_id = int(callback.data.split("_")[1])
+    await state.update_data(edit_id=trade_id)
     builder = InlineKeyboardBuilder()
-    builder.button(text="Edit Date", callback_data=f"edit_field_{trade_id}_date")
-    builder.button(text="Edit Pair", callback_data=f"edit_field_{trade_id}_pair")
-    builder.button(text="Edit Percent", callback_data=f"edit_field_{trade_id}_percent")
-    builder.button(text="Edit Comment", callback_data=f"edit_field_{trade_id}_comment")
-    builder.button(text="Edit Screenshot", callback_data=f"edit_field_{trade_id}_screenshot")
+    fields = ["date", "pair", "percent", "comment", "screenshot"]
+    for field in fields:
+        builder.button(text=f"Edit {field.capitalize()}", callback_data=f"edit_field_{field}")
     builder.button(text="Cancel", callback_data=f"trade_{trade_id}")
     builder.adjust(1)
     await callback.message.edit_text("Select field to edit:", reply_markup=builder.as_markup())
 
-@dp.callback_query(lambda c: c.data.startswith("edit_field_"))
-async def edit_field(callback: types.CallbackQuery, state: dict = {}):
-    parts = callback.data.split("_")
-    trade_id = int(parts[2])
-    field = parts[3]
-    state["editing"] = (trade_id, field)
-    await callback.message.answer(f"Send new value for {field} (or type /skip to leave unchanged):")
+@dp.callback_query(F.data.startswith("edit_field_"))
+async def edit_field_choose(callback: types.CallbackQuery, state: FSMContext):
+    field = callback.data.split("_")[2]
+    await state.update_data(edit_field=field)
+    await state.set_state(EditTrade.waiting_value)
+    await callback.message.answer(f"Send new value for {field}:")
 
-@dp.message(Command("skip"))
-async def skip_edit(message: types.Message, state: dict = {}):
-    if "editing" not in state:
-        await message.answer("No active editing.")
-        return
-    trade_id, _ = state.pop("editing")
-    await message.answer("Edit skipped.", reply_markup=main_menu())
-
-@dp.message()
-async def save_edit(message: types.Message, state: dict = {}):
-    if "editing" not in state:
-        await message.answer("Use /start to begin.", reply_markup=main_menu())
-        return
-    trade_id, field = state.pop("editing")
-    update_trade(trade_id, field, message.text)
-    await message.answer(f"{field.capitalize()} updated.", reply_markup=main_menu())
-
-@dp.callback_query(lambda c: c.data == "add_trade")
-async def add_trade_start(callback: types.CallbackQuery, state: dict = {}):
-    state["adding"] = {}
-    await callback.message.answer("Enter year (e.g., 2025):")
-
-@dp.message()
-async def add_trade_process(message: types.Message, state: dict = {}):
-    if "adding" not in state:
-        return
-    adding = state["adding"]
-    if "year" not in adding:
-        adding["year"] = int(message.text)
-        await message.answer("Enter month (e.g., 4):")
-    elif "month" not in adding:
-        adding["month"] = int(message.text)
-        await message.answer("Enter date (e.g., 2025-04-27):")
-    elif "date" not in adding:
-        adding["date"] = message.text
-        await message.answer("Enter pair (e.g., BTC/USD):")
-    elif "pair" not in adding:
-        adding["pair"] = message.text
-        await message.answer("Enter percent (e.g., 5 or -3):")
-    elif "percent" not in adding:
-        adding["percent"] = message.text
-        await message.answer("Enter comment (or '-' if none):")
-    elif "comment" not in adding:
-        adding["comment"] = message.text
-        await message.answer("Send screenshot URL (or '-' if none):")
-    elif "screenshot" not in adding:
-        adding["screenshot"] = None if message.text == "-" else message.text
-        add_trade(**adding)
-        state.pop("adding")
-        await message.answer("Trade added successfully!", reply_markup=main_menu())
+@dp.message(EditTrade.waiting_value)
+async def edit_field_value(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    update_trade(data["edit_id"], data["edit_field"], message.text)
+    await state.clear()
+    await message.answer(f"{data['edit_field'].capitalize()} updated.", reply_markup=main_menu())
 
 # --- Run the bot ---
 async def main():
