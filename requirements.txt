@@ -2,3 +2,4 @@ python-telegram-bot==20.8
 pandas
 openpyxl
 aiogram==3.4.1
+asyncpg==0.29.0
