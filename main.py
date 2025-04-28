@@ -495,11 +495,12 @@ async def view_trade(callback: types.CallbackQuery):
         )
     else:
         # если нет скрина - просто текст
-        await callback.message.answer(
-            text,
-            parse_mode="Markdown",
-            reply_markup=builder.as_markup()
-        )
+        await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=builder.as_markup())
+        # await callback.message.answer(
+        #     text,
+        #     parse_mode="Markdown",
+        #     reply_markup=builder.as_markup()
+        # )
 
 @dp.callback_query(F.data.startswith("delete_"))
 async def confirm_delete(callback: types.CallbackQuery):
