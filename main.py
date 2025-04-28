@@ -232,7 +232,7 @@ async def add_trade_screenshot(message: types.Message, state: FSMContext):
 # --- Editing trades ---
 @dp.callback_query(F.data.startswith("edit_"))
 async def edit_trade_start(callback: types.CallbackQuery, state: FSMContext):
-    trade_id = int(callback.data.split("_")[1])
+    trade_id = int(callback.data.split("_")[-1])
     print('edit_trade_start---------------->', callback.data)
     await state.update_data(edit_id=trade_id)
     builder = InlineKeyboardBuilder()
@@ -245,7 +245,7 @@ async def edit_trade_start(callback: types.CallbackQuery, state: FSMContext):
 
 @dp.callback_query(F.data.startswith("edit_field_"))
 async def edit_field_choose(callback: types.CallbackQuery, state: FSMContext):
-    field = callback.data.split("_")[2]
+    field = callback.data.split("_")[-1]
     print('edit_field_choose---------------->', callback.data)
     await state.update_data(edit_field=field)
     await state.set_state(EditTrade.waiting_value)
