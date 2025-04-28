@@ -177,17 +177,17 @@ async def add_trade_start(callback: types.CallbackQuery, state: FSMContext):
     await state.set_state(AddTrade.year)
     await callback.message.answer("Enter year (e.g., 2025):")
 
-@dp.message(AddTrade.year)
-async def add_trade_year(message: types.Message, state: FSMContext):
-    await state.update_data(year=int(message.text))
-    await state.set_state(AddTrade.month)
-    await message.answer("Enter month (e.g., 4):")
+# @dp.message(AddTrade.year)
+# async def add_trade_year(message: types.Message, state: FSMContext):
+#     await state.update_data(year=int(message.text))
+#     await state.set_state(AddTrade.month)
+#     await message.answer("Enter month (e.g., 4):")
 
-@dp.message(AddTrade.month)
-async def add_trade_month(message: types.Message, state: FSMContext):
-    await state.update_data(month=int(message.text))
-    await state.set_state(AddTrade.date)
-    await message.answer("Enter date (e.g., 2025-04-27):")
+# @dp.message(AddTrade.month)
+# async def add_trade_month(message: types.Message, state: FSMContext):
+#     await state.update_data(month=int(message.text))
+#     await state.set_state(AddTrade.date)
+#     await message.answer("Enter date (e.g., 2025-04-27):")
 
 @dp.message(AddTrade.date)
 async def add_trade_date(message: types.Message, state: FSMContext):
@@ -233,6 +233,7 @@ async def add_trade_screenshot(message: types.Message, state: FSMContext):
 @dp.callback_query(F.data.startswith("edit_"))
 async def edit_trade_start(callback: types.CallbackQuery, state: FSMContext):
     trade_id = int(callback.data.split("_")[1])
+    print('edit_trade_start---------------->', callback.data)
     await state.update_data(edit_id=trade_id)
     builder = InlineKeyboardBuilder()
     fields = ["date", "pair", "percent", "comment", "screenshot"]
@@ -245,6 +246,7 @@ async def edit_trade_start(callback: types.CallbackQuery, state: FSMContext):
 @dp.callback_query(F.data.startswith("edit_field_"))
 async def edit_field_choose(callback: types.CallbackQuery, state: FSMContext):
     field = callback.data.split("_")[2]
+    print('edit_field_choose---------------->', callback.data)
     await state.update_data(edit_field=field)
     await state.set_state(EditTrade.waiting_value)
     await callback.message.answer(f"Send new value for {field}:")
