@@ -13,23 +13,11 @@ dp = Dispatcher()
 # --- Database setup ---
 conn = sqlite3.connect("trades.db")
 cursor = conn.cursor()
-# cursor.execute("""
-# CREATE TABLE IF NOT EXISTS trades (
-#     id INTEGER PRIMARY KEY AUTOINCREMENT,
-#     # year INTEGER,
-#     # month INTEGER,
-#     date TEXT,
-#     pair TEXT,
-#     percent TEXT,
-#     comment TEXT,
-#     screenshot TEXT
-# )
-# """)
-# conn.commit()
-
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS trades (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    year INTEGER,
+    month INTEGER,
     date TEXT,
     pair TEXT,
     percent TEXT,
@@ -54,12 +42,11 @@ class EditTrade(StatesGroup):
 
 # --- Helper functions ---
 def get_years():
-    cursor.execute("SELECT DISTINCT EXTRACT(YEAR FROM TO_DATE(date, 'YYYY-MM-DD')) AS year FROM trades ORDER BY year DESC;")
-    return [str(row[0]) for row in cursor.fetchall()]
+     cursor.execute("SELECT DISTINCT year FROM trades ORDER BY year DESC")
+     return [str(row[0]) for row in cursor.fetchall()]
 
 def get_months(year):
-    # cursor.execute("SELECT DISTINCT month FROM trades WHERE year = ? ORDER BY month DESC", (year,))
-    cursor.execute("SELECT DISTINCT EXTRACT(MONTH FROM TO_DATE(date, 'YYYY-MM-DD')) AS year FROM trades ORDER BY year DESC;")
+    cursor.execute("SELECT DISTINCT month FROM trades WHERE year = ? ORDER BY month DESC", (year,))
     return [str(row[0]) for row in cursor.fetchall()]
 
 def get_trades(year, month, filter_type):
@@ -77,14 +64,9 @@ def get_trade(trade_id):
     cursor.execute("SELECT * FROM trades WHERE id = ?", (trade_id,))
     return cursor.fetchone()
 
-# def add_trade(year, month, date, pair, percent, comment, screenshot):
-#     cursor.execute("INSERT INTO trades (year, month, date, pair, percent, comment, screenshot) VALUES (?, ?, ?, ?, ?, ?, ?)",
-#                    (year, month, date, pair, percent, comment, screenshot))
-#     conn.commit()
-
-def add_trade(date, pair, percent, comment, screenshot):
-    cursor.execute("INSERT INTO trades (date, pair, percent, comment, screenshot) VALUES (?, ?, ?, ?, ?)",
-                   (date, pair, percent, comment, screenshot))
+def add_trade(year, month, date, pair, percent, comment, screenshot):
+    cursor.execute("INSERT INTO trades (year, month, date, pair, percent, comment, screenshot) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                   (year, month, date, pair, percent, comment, screenshot))
     conn.commit()
 
 def update_trade(trade_id, field, value):
