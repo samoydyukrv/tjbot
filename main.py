@@ -1,7 +1,8 @@
 import asyncio
 import asyncpg
 import csv
-from aiogram.types import InputFile
+from datetime import datetime
+from aiogram.types import FSInputFile
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -285,18 +286,24 @@ async def export_trades_to_csv(file_path="trades.csv"):
             ])
 
 @dp.callback_query(F.data == "export_csv")
-async def export_csv_callback(callback: types.CallbackQuery):
-    file_path = "trades.csv"
-    await export_trades_to_csv(file_path)
-
+async def handle_export_csv(callback: types.CallbackQuery):
     try:
-        file = InputFile(path=file_path)
-        await callback.message.answer_document(file, caption="📊 Here is your trade history CSV")
+        trades = await get_all_trades()
+        if not trades:
+            await callback.message.answer("No trades to export.")
+            return
+
+        filename = f"trades_{datetime.now().date()}.csv"
+        with open(filename, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Date", "Pair", "Percentage", "Comment"])
+            for trade in trades:
+                writer.writerow([trade.date, trade.pair, trade.percentage, trade.comment])
+
+        document = FSInputFile(filename)
+        await callback.message.answer_document(document, caption="📄 Your trade history:")
     except Exception as e:
         await callback.message.answer(f"❌ Failed to send CSV: {e}")
-    finally:
-        if os.path.exists(file_path):
-            os.remove(file_path)
 
 
 # --- Startup ---
