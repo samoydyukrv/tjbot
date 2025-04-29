@@ -278,10 +278,10 @@ async def export_trades_to_csv(file_path="trades.csv"):
 
     with open(file_path, "w", newline='', encoding="utf-8") as csvfile:
         writer = csv.writer(csvfile)
-        writer.writerow(["ID", "Year", "Month", "Date", "Pair", "Percent", "Comment", "Screenshot"])
+        writer.writerow(["ID", "Date", "Pair", "Percent", "Comment", "Screenshot"])
         for row in rows:
             writer.writerow([
-                row["id"], row["year"], row["month"], row["date"],
+                row["id"], row["date"],
                 row["pair"], row["percent"], row["comment"], row["screenshot"]
             ])
 
