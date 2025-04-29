@@ -111,6 +111,7 @@ async def view_history(callback: types.CallbackQuery):
     builder = InlineKeyboardBuilder()
     for year in years:
         builder.button(text=year, callback_data=f"year_{year}")
+    builder.button(text="Export to CSV", callback_data="export_csv")
     builder.button(text="Back", callback_data="back_main")
     builder.adjust(2)
     await callback.message.edit_text("Select year:", reply_markup=builder.as_markup())
@@ -192,7 +193,7 @@ async def view_trade(callback: types.CallbackQuery):
     text = f"**Date:** {trade['date']}\n**Pair:** {trade['pair']}\n**Percent:** {trade['percent']}%\n**Comment:** {trade['comment']}"
     builder = InlineKeyboardBuilder()
     if trade['screenshot']:
-     builder.button(text="Screenshot", url=trade['screenshot'])
+        builder.button(text="Screenshot", url=trade['screenshot'])
     builder.button(text="Edit", callback_data=f"edit_{trade_id}")
     builder.button(text="Delete", callback_data=f"delete_{trade_id}")
     builder.button(text="Back", callback_data=f"filter_{trade['year']}_{trade['month']}_all")
@@ -299,6 +300,34 @@ async def edit_field_value(message: types.Message, state: FSMContext):
     await update_trade(data["edit_id"], data["edit_field"], message.text)
     await state.clear()
     await message.answer(f"{data['edit_field'].capitalize()} updated.", reply_markup=main_menu())
+
+async def export_trades_to_csv(file_path="trades.csv"):
+    async with db_pool.acquire() as conn:
+        rows = await conn.fetch("SELECT * FROM trades_main ORDER BY year DESC, month DESC, date DESC")
+
+    with open(file_path, "w", newline='', encoding="utf-8") as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(["ID", "Year", "Month", "Date", "Pair", "Percent", "Comment", "Screenshot"])
+        for row in rows:
+            writer.writerow([
+                row["id"], row["year"], row["month"], row["date"],
+                row["pair"], row["percent"], row["comment"], row["screenshot"]
+            ])
+
+@dp.callback_query(F.data == "export_csv")
+async def export_csv_callback(callback: types.CallbackQuery):
+    file_path = "trades.csv"
+    await export_trades_to_csv(file_path)
+    
+    try:
+        with open(file_path, "rb") as file:
+            await callback.message.answer_document(file, caption="📊 Here is your trade history CSV")
+    except Exception as e:
+        await callback.message.answer(f"❌ Failed to send CSV: {e}")
+    finally:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
 
 # --- Startup ---
 async def main():
