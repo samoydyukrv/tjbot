@@ -288,20 +288,10 @@ async def export_trades_to_csv(file_path="trades.csv"):
 @dp.callback_query(F.data == "export_csv")
 async def handle_export_csv(callback: types.CallbackQuery):
     try:
-        trades = await export_trades_to_csv()
-        if not trades:
-            await callback.message.answer("No trades to export.")
-            return
-
-        filename = f"trades_{datetime.now().date()}.csv"
-        with open(filename, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(["Date", "Pair", "Percentage", "Comment"])
-            for trade in trades:
-                writer.writerow([trade.date, trade.pair, trade.percentage, trade.comment])
-
-        document = FSInputFile(filename)
-        await callback.message.answer_document(document, caption="📄 Your trade history:")
+        file_path = "trades.csv"
+        await export_trades_to_csv(file_path)
+        doc = FSInputFile(file_path, filename="Trading_Journal.csv")
+        await callback.message.answer_document(document=doc)
     except Exception as e:
         await callback.message.answer(f"❌ Failed to send CSV: {e}")
 
