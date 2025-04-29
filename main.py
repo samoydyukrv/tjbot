@@ -319,10 +319,10 @@ async def export_trades_to_csv(file_path="trades.csv"):
 async def export_csv_callback(callback: types.CallbackQuery):
     file_path = "trades.csv"
     await export_trades_to_csv(file_path)
-    
+
     try:
-        with open(file_path, "rb") as file:
-            await callback.message.answer_document(file, caption="📊 Here is your trade history CSV")
+        file = InputFile(path=file_path)
+        await callback.message.answer_document(file, caption="📊 Here is your trade history CSV")
     except Exception as e:
         await callback.message.answer(f"❌ Failed to send CSV: {e}")
     finally:
