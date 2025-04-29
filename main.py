@@ -288,7 +288,7 @@ async def export_trades_to_csv(file_path="trades.csv"):
 @dp.callback_query(F.data == "export_csv")
 async def handle_export_csv(callback: types.CallbackQuery):
     try:
-        trades = await get_all_trades()
+        trades = await export_trades_to_csv()
         if not trades:
             await callback.message.answer("No trades to export.")
             return
